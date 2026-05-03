@@ -2205,7 +2205,10 @@ class EditorApp(tk.Tk):
             "accent": "#FFFFFF",
             "field":  "#3060B0",
             "sel":    "#80D060",
-            "dim":    "#C0E0F0",
+            # Cream/pale-lime — warm contrast against the blue bg so
+            # secondary text (hints, party-IDs read-out) stays legible.
+            # The previous pale-blue dim disappeared into the bg.
+            "dim":    "#F0E8A8",
         },
         "Light (system)": {
             "bg":     "#F0F0F0",
@@ -2824,8 +2827,11 @@ class EditorApp(tk.Tk):
         self.status_lbl.pack(fill="x", side="bottom")
 
     def _build_general_tab(self, nb):
-        frm = ttk.Frame(nb, padding=12)
-        nb.add(frm, text="General")
+        # Wrap in scoped scroll canvas — the General tab's content
+        # (money, names/favorites, party preferences, location, block
+        # info) can exceed the window height on smaller laptop displays.
+        outer, frm = self._make_scrollable(nb)
+        nb.add(outer, text="General")
 
         # --- Money ---
         money_grp = ttk.LabelFrame(frm, text="Money", padding=8)
@@ -2971,13 +2977,77 @@ class EditorApp(tk.Tk):
         self.lbl_diag = ttk.Label(info_grp, text="—", foreground=self.THEMES[self.current_theme]["dim"])
         self.lbl_diag.pack(anchor="w", pady=(4, 0))
 
+    def _make_scrollable(self, parent):
+        """Build a vertically-scrollable area inside `parent`.
+
+        Returns (outer, inner). Add `outer` to a Notebook as the tab page
+        and pack/grid your widgets into `inner`. The inner frame matches
+        the canvas width, so widgets that pack with fill="x" still
+        stretch as expected.
+
+        Mouse-wheel binding is *scoped* via <Enter>/<Leave>: bind_all
+        only takes effect while the cursor is over this canvas, so it
+        can't race the Notebook tab-header click handler the way the
+        old global bind did.
+        """
+        bg = self.THEMES[self.current_theme]["bg"]
+
+        outer = ttk.Frame(parent)
+        canvas = tk.Canvas(outer, highlightthickness=0, bd=0, bg=bg)
+        vsb = ttk.Scrollbar(outer, orient="vertical", command=canvas.yview)
+        canvas.configure(yscrollcommand=vsb.set)
+        canvas.pack(side="left", fill="both", expand=True)
+        vsb.pack(side="right", fill="y")
+
+        inner = ttk.Frame(canvas, padding=12)
+        inner_id = canvas.create_window((0, 0), window=inner, anchor="nw")
+
+        def _on_inner_configure(_event):
+            canvas.configure(scrollregion=canvas.bbox("all"))
+        inner.bind("<Configure>", _on_inner_configure)
+
+        def _on_canvas_configure(event):
+            # Make the inner frame as wide as the canvas so child
+            # widgets that pack fill="x" still stretch correctly.
+            canvas.itemconfigure(inner_id, width=event.width)
+        canvas.bind("<Configure>", _on_canvas_configure)
+
+        def _on_mousewheel(event):
+            # Mac: event.delta is small (e.g. ±1); Windows: ±120.
+            # X11 sends Button-4/5 instead with no delta.
+            if getattr(event, "num", 0) == 4:
+                canvas.yview_scroll(-1, "units")
+            elif getattr(event, "num", 0) == 5:
+                canvas.yview_scroll(1, "units")
+            else:
+                step = -1 if event.delta > 0 else 1
+                canvas.yview_scroll(step, "units")
+
+        def _bind_wheel(_event):
+            canvas.bind_all("<MouseWheel>", _on_mousewheel)
+            canvas.bind_all("<Button-4>", _on_mousewheel)
+            canvas.bind_all("<Button-5>", _on_mousewheel)
+
+        def _unbind_wheel(_event):
+            canvas.unbind_all("<MouseWheel>")
+            canvas.unbind_all("<Button-4>")
+            canvas.unbind_all("<Button-5>")
+
+        canvas.bind("<Enter>", _bind_wheel)
+        canvas.bind("<Leave>", _unbind_wheel)
+
+        return outer, inner
+
     def _build_character_tab(self, nb, label, char_index):
-        # Plain Frame — no scroll-canvas. Earlier versions wrapped this in
-        # a Canvas+Frame for vertical scrolling, but the bind_all mouse-wheel
-        # handling on Mac was eating Notebook tab-header clicks. The 2-column
-        # inventory layout fits fine in a 1100x820 window without scroll.
-        frm = ttk.Frame(nb, padding=12)
-        nb.add(frm, text=label)
+        # The character tab is the tallest in the app (identity + HP/PP +
+        # stats + boosts + 14-slot inventory + equipment + position +
+        # diagnostics).  On smaller laptop displays it overflows a
+        # 1100x820 window, so wrap it in a scoped scroll canvas. The
+        # mousewheel binding lives only while the cursor is over the
+        # canvas (see _make_scrollable), which keeps Notebook tab clicks
+        # snappy on Mac.
+        outer, frm = self._make_scrollable(nb)
+        nb.add(outer, text=label)
 
         widgets = {}
 
@@ -3269,11 +3339,12 @@ class EditorApp(tk.Tk):
         between calls. The save stores 36 item-id bytes at data offset
         0x56-0x79 (RAM 0x984B-0x986E).
 
-        Layout: plain Frame (no scrolling), 4 columns × 9 rows for the 36
-        slots so they all fit on screen without needing a scroll wrapper.
+        Layout: 4 columns × 9 rows for the 36 slots, wrapped in a
+        scoped scroll canvas so the bottom rows stay reachable when
+        the window is resized smaller than the natural content height.
         """
-        frm = ttk.Frame(nb, padding=12)
-        nb.add(frm, text="Escargo Express")
+        outer, frm = self._make_scrollable(nb)
+        nb.add(outer, text="Escargo Express")
 
         # Header
         ttk.Label(frm,

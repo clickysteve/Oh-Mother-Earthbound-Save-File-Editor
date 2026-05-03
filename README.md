@@ -14,12 +14,35 @@ permanent stat boosts, and player preferences (text speed, sound,
 window flavour, auto-fight). Both A and B mirror copies of each save
 block are updated on save, and both checksums are recomputed.
 
-```
-File:  ~/Library/.../RetroArch/saves/Earthbound (U) [!].srm
-Slot:  [2 ▼]   Theme: [Dark (graphite) ▼]   Tools…   Reload   Save
+## Screenshots
 
-[ General | 1: Ness | 2: Paula | 3: Jeff | 4: Poo | Escargo | Story flags | Hex ]
-```
+**General tab** — money, names & favourites, party-leader position
+(with quick-jump presets), in-game preferences, party read-out,
+quick-action buttons:
+
+![General tab](docs/screenshots/general.png)
+
+**Character tab** — identity, HP/PP, stats (with-equipment vs. base),
+permanent stat boosts, 14 inventory slots with typeahead search,
+equipment dropdowns and status:
+
+![Character tab](docs/screenshots/character.png)
+
+**Escargo Express** — 36-slot storage editor for the EB delivery
+service:
+
+![Escargo Express tab](docs/screenshots/escargo.png)
+
+**Story flags** — filterable view over all 1024 plot/event flags,
+with curated descriptions, per-flag notes, and a one-click sanctuary
+preset:
+
+![Story flags tab](docs/screenshots/story-flags.png)
+
+**Hex viewer** — colour-coded read-only dump of the full 8 KB SRAM
+with annotated section headers, useful for reverse-engineering:
+
+![Hex viewer tab](docs/screenshots/hex-viewer.png)
 
 ## Features
 
@@ -121,17 +144,54 @@ Slot:  [2 ▼]   Theme: [Dark (graphite) ▼]   Tools…   Reload   Save
 - **Backup-on-save** — writes a `.bak` of the previous file before
   overwriting.
 - **Auto-reopens last file** on launch.
-
-## Requirements
-
-- **Python 3.8+** (Apple's bundled `python3` works on macOS)
-- **tkinter** — ships with the Python distribution on macOS, Windows,
-  and most Linux distros.
-- No third-party packages.
-
-If `python3 -c "import tkinter"` works without error, you're good.
+- **Scrollable tabs** — General, character, and Escargo tabs scroll
+  vertically when the window is shorter than their content, so the
+  bottom rows stay reachable on smaller laptop displays. Mousewheel
+  binding is scoped per-tab so Notebook tab clicks stay snappy.
+- **Toolbar shortcut to Tools** — the Tools menu is also available
+  as an inline toolbar button so you don't have to chase the macOS
+  menu bar.
 
 ## Running
+
+Three ways to use it — pick whichever fits.
+
+### A — prebuilt Mac app (easiest, no Python needed)
+
+Grab the signed + notarised `.app` from the
+[Releases](https://github.com/clickysteve/Oh-Mother-Earthbound-Save-File-Editor/releases)
+page, drag it to Applications, double-click. No Gatekeeper warning,
+no `xattr` workaround — Apple's notary service has already stamped
+it.
+
+The bundle is built with PyInstaller from `eb_save_gui.py`, signed
+with a Developer ID Application certificate, notarised, and stapled.
+Build instructions for maintainers are in [BUILDING.md](BUILDING.md).
+
+### B — prebuilt Windows .exe (no Python needed)
+
+Grab `Oh Mother.exe` from the same
+[Releases](https://github.com/clickysteve/Oh-Mother-Earthbound-Save-File-Editor/releases)
+page. Single self-contained binary; just double-click to run.
+
+The Windows build is **unsigned** — first time you launch it, Windows
+SmartScreen will say "Windows protected your PC". Click
+**More info → Run anyway**. After the first launch it stops nagging.
+
+The `.exe` is built automatically by the
+[`.github/workflows/release.yml`](.github/workflows/release.yml) GitHub
+Actions workflow on every tag push. PyInstaller can't cross-compile,
+so this is the simplest path if you don't have a Windows machine.
+
+### C — run the Python script (Mac / Windows / Linux)
+
+Requires:
+
+- **Python 3.8+** with **tkinter** — ships with most Python
+  distributions
+- No third-party packages
+
+If `python3 -c "import tkinter"` works without error, you're good.
 
 ```bash
 git clone https://github.com/clickysteve/Oh-Mother-Earthbound-Save-File-Editor.git
@@ -139,8 +199,25 @@ cd Oh-Mother-Earthbound-Save-File-Editor
 python3 eb_save_gui.py
 ```
 
-That's it — no install step.  Pick **File → Open .srm / .sav…** or click
-the "Open .srm / .sav…" button on the toolbar.
+If `import tkinter` fails:
+
+| OS | Fix |
+|---|---|
+| macOS (Homebrew Python) | `brew install python-tk@3.12` |
+| Ubuntu / Debian | `sudo apt install python3-tk` |
+| Fedora / RHEL | `sudo dnf install python3-tkinter` |
+| Windows | Re-run the python.org installer with "tcl/tk and IDLE" checked |
+
+> macOS note: Apple's bundled `/usr/bin/python3` has tkinter, but it
+> links against the deprecated system Tk 8.5, which renders the editor
+> with washed-out widget styling on modern macOS. Either Homebrew's
+> `python@3.12 + python-tk@3.12` or the python.org universal2
+> installer give you a modern Tk 8.6/9.x and look correct. (This same
+> issue is why the build script for the Mac `.app` refuses to use
+> `/usr/bin/python3` — see BUILDING.md for the full story.)
+
+Pick **File → Open .srm / .sav…** or click the "Open .srm / .sav…"
+button on the toolbar to load a save.
 
 EarthBound saves usually live here:
 

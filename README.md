@@ -1,5 +1,11 @@
 # Oh Mother — EarthBound Save File Editor
 
+Picture the scene: you accidentally overwrite your EarthBound save
+file. You find an older save, but can't face grinding through all the
+levels again to get to where you were. What do you do?!
+
+That's exactly what happened to me, so I built this tool.
+
 > ⚠️ **Experimental.** This tool reads and writes the binary save files
 > of EarthBound (SNES, USA region). Always make a backup before editing —
 > the editor's auto-`.bak` does it for you, but flipping the wrong byte

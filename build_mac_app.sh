@@ -5,6 +5,13 @@
 # Prerequisites:  see BUILDING.md
 #
 # Configurable via env vars:
+#   SKIP_DMG        — if set, don't build a .dmg even if create-dmg is
+#                     available.  Useful for fast iteration where you
+#                     just want a working .app to smoke-test.
+#   SKIP_DMG_NOTARY — if set, build + sign the .dmg but skip the second
+#                     notarisation round-trip.  The .app inside is
+#                     already stapled, so Gatekeeper still passes; you
+#                     just lose the offline-friendly DMG ticket.
 #   PYTHON          — path to the Python interpreter to bundle.  Default:
 #                     `python3` from $PATH.  Anaconda's python3 has
 #                     historically had flaky tkinter on macOS for
@@ -19,10 +26,11 @@
 #                     keychain, the script falls back to the first
 #                     "Developer ID Application:" identity it finds.
 #   NOTARY_PROFILE  — name of the notarytool keychain profile.  Default:
-#                     LOOPSAB_NOTARY (reused from the user's other
-#                     project — already configured for smblythe@gmail.com
-#                     / team 2N9AC8M66C).  Override if you've set up a
-#                     project-specific profile.
+#                     LOOPSAB_NOTARY (a profile name reused from another
+#                     project on the maintainer's machine — already
+#                     configured for the same Apple ID + team).
+#                     Override with NOTARY_PROFILE=YourProfileName if
+#                     you've set up your own.
 #   APP_NAME        — the name shown in Finder.  Default: "Oh Mother".
 #   BUNDLE_ID       — reverse-DNS bundle identifier.  Default:
 #                     com.clickysteve.ohmother.
@@ -180,13 +188,76 @@ xcrun stapler staple "${APP_PATH}"
 xcrun stapler validate "${APP_PATH}"
 
 # ---------------------------------------------------------------------
+# Build a distributable .dmg.
+#
+# Why DMG and not zip:  zipping a notarised .app then uploading and
+# re-downloading via a browser sometimes mangles the staple or strips
+# resource forks, producing the dreaded "Oh Mother.app is damaged and
+# can't be opened" Gatekeeper error on the user's end.  DMGs preserve
+# everything cleanly and are the conventional Mac distribution format.
+DMG_PATH=""
+if [[ -n "${SKIP_DMG:-}" ]]; then
+    echo "==> SKIP_DMG set — not building .dmg"
+elif ! command -v create-dmg >/dev/null 2>&1; then
+    echo "==> create-dmg not installed — skipping .dmg step"
+    echo "    install with:  brew install create-dmg"
+else
+    # Pull the version string straight out of the source so the .dmg
+    # filename always matches what the app reports.
+    VERSION=$(awk -F'"' '/^__version__/ {print $2; exit}' eb_save_gui.py)
+    if [[ -z "${VERSION}" ]]; then
+        VERSION="dev"
+    fi
+    DMG_NAME="${APP_NAME// /-}-v${VERSION}.dmg"
+    DMG_PATH="dist/${DMG_NAME}"
+    rm -f "${DMG_PATH}"
+
+    echo "==> Building ${DMG_PATH} (drag-to-Applications layout)"
+    # --no-internet-enable :  silence a deprecated-flag warning
+    # The icon coords are tuned for the 600x400 window.
+    create-dmg \
+        --volname "${APP_NAME}" \
+        --window-size 600 400 \
+        --icon "${APP_NAME}.app" 175 200 \
+        --hide-extension "${APP_NAME}.app" \
+        --app-drop-link 425 200 \
+        --no-internet-enable \
+        "${DMG_PATH}" \
+        "${APP_PATH}"
+
+    echo "==> Code-signing ${DMG_PATH}"
+    codesign --force --sign "${IDENTITY}" --timestamp "${DMG_PATH}"
+    codesign --verify --verbose=2 "${DMG_PATH}"
+
+    if [[ -n "${SKIP_DMG_NOTARY:-}" ]]; then
+        echo "==> SKIP_DMG_NOTARY set — DMG is signed but unnotarised"
+        echo "    (the .app inside is already notarised + stapled, so"
+        echo "    Gatekeeper still passes when the user mounts it)"
+    else
+        echo "==> Notarising ${DMG_PATH} (a few more minutes)"
+        xcrun notarytool submit "${DMG_PATH}" \
+            --keychain-profile "${NOTARY_PROFILE}" \
+            --wait
+        echo "==> Stapling ticket to ${DMG_PATH}"
+        xcrun stapler staple "${DMG_PATH}"
+        xcrun stapler validate "${DMG_PATH}"
+    fi
+fi
+
+# ---------------------------------------------------------------------
 echo
 echo "================================================================="
 echo "  Done.  ${APP_PATH} is signed, notarised, and ready to ship."
+if [[ -n "${DMG_PATH}" && -f "${DMG_PATH}" ]]; then
+    echo "  Distributable:  ${DMG_PATH}"
+fi
 echo
 echo "  Smoke-test it:"
 echo "    open \"${APP_PATH}\""
+if [[ -n "${DMG_PATH}" && -f "${DMG_PATH}" ]]; then
+    echo "    open \"${DMG_PATH}\""
+fi
 echo
-echo "  Repackage for distribution:"
-echo "    ditto -c -k --keepParent \"${APP_PATH}\" \"${APP_NAME}-vX.Y.Z.zip\""
+echo "  Upload the .dmg to a GitHub Release (or skip if SKIP_DMG was set"
+echo "  and you'd rather hand-craft a zip — see BUILDING.md)."
 echo "================================================================="

@@ -207,40 +207,42 @@ When it finishes, `dist/Oh Mother.app` is ready to ship.
 
 ## Distribution
 
-### Option 1 — drag-to-install zip
+### Recommended — drag-to-install DMG (built automatically)
+
+If you have `create-dmg` installed, `build_mac_app.sh` produces a
+signed + notarised `.dmg` automatically. The version string comes from
+`__version__` in `eb_save_gui.py`, so the filename always matches what
+the app reports:
 
 ```bash
-ditto -c -k --keepParent "dist/Oh Mother.app" "Oh-Mother-vX.Y.Z.zip"
+brew install create-dmg          # one-time
+./build_mac_app.sh               # produces dist/Oh-Mother-v0.4.0.dmg
 ```
 
-Attach the zip to a GitHub Release. Users download, unzip, drag to
-Applications, double-click. No Gatekeeper warnings because the bundle
-is notarised.
+That's the file to upload to a GitHub Release. Users download, mount,
+drag the app to Applications, eject. No Gatekeeper warnings because
+both the `.app` and the `.dmg` are notarised + stapled.
 
-### Option 2 — drag-to-install DMG
+If you want the .app and skip the DMG step (e.g. for fast iteration),
+set `SKIP_DMG=1`. To build + sign the DMG but skip the second
+notarisation round-trip (the inner `.app` stays notarised + stapled,
+which is enough for Gatekeeper), set `SKIP_DMG_NOTARY=1`.
 
-For a slightly more polished install experience, build a `.dmg` with
-`create-dmg`:
+### Alternative — zip (only if you have a reason)
+
+Zipping a notarised `.app` and uploading via a browser is fragile —
+some zip tools strip resource forks, and the round-trip through a
+browser's quarantine handling can produce the "Oh Mother.app is
+damaged and can't be opened" Gatekeeper error on the receiver's
+machine. If you must zip, use `ditto` with `--sequesterRsrc` so
+metadata survives any extractor:
 
 ```bash
-brew install create-dmg
-create-dmg \
-    --volname "Oh Mother Save Editor" \
-    --window-size 600 400 \
-    --icon "Oh Mother.app" 175 200 \
-    --hide-extension "Oh Mother.app" \
-    --app-drop-link 425 200 \
-    "Oh-Mother-vX.Y.Z.dmg" "dist/Oh Mother.app"
+ditto -c -k --sequesterRsrc --keepParent \
+    "dist/Oh Mother.app" "Oh-Mother-vX.Y.Z-mac.zip"
 ```
 
-The DMG should also be code-signed:
-
-```bash
-codesign --force --sign "Developer ID Application: YOUR NAME (TEAMID)" \
-    "Oh-Mother-vX.Y.Z.dmg"
-```
-
-…and notarised the same way as the .app.
+DMG remains the more reliable choice — recommend it.
 
 ### Option 3 — automate via GitHub Actions
 

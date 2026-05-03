@@ -172,8 +172,23 @@ if [[ -f "${PLIST}" ]]; then
         VERSION="dev"
     fi
     echo "==> Stamping Info.plist version: ${VERSION}"
-    /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString ${VERSION}" "${PLIST}"
-    /usr/libexec/PlistBuddy -c "Set :CFBundleVersion ${VERSION}"            "${PLIST}"
+    # PlistBuddy's `Set` errors out if the key doesn't exist, and
+    # `Add` errors out if it does. PyInstaller writes
+    # CFBundleShortVersionString but not CFBundleVersion, so we try
+    # Add first (silently swallowing the "exists" error) and then Set
+    # to the desired value.  `|| true` keeps `set -e` happy.
+    /usr/libexec/PlistBuddy \
+        -c "Add :CFBundleShortVersionString string ${VERSION}" \
+        "${PLIST}" 2>/dev/null || true
+    /usr/libexec/PlistBuddy \
+        -c "Set :CFBundleShortVersionString ${VERSION}" \
+        "${PLIST}"
+    /usr/libexec/PlistBuddy \
+        -c "Add :CFBundleVersion string ${VERSION}" \
+        "${PLIST}" 2>/dev/null || true
+    /usr/libexec/PlistBuddy \
+        -c "Set :CFBundleVersion ${VERSION}" \
+        "${PLIST}"
 else
     echo "WARN: ${PLIST} not found — skipping version stamp"
 fi

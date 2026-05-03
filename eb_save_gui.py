@@ -2804,7 +2804,23 @@ class EditorApp(tk.Tk):
         ttk.Button(bar, text="Tools…", command=self._show_tools_menu_inline
                    ).pack(side="left", padx=4)
 
-        # Notebook with tabs: General, Ness, Paula, Jeff, Poo
+        # Status bar — kept as a tk.Label so we can flash the background
+        # green on save.  Pack ORDER matters: pack the status bar BEFORE
+        # the notebook even though it's visually below it.  Tk's pack
+        # manager allocates space in the order widgets are packed, so
+        # if the notebook claimed `expand=True` first, the status bar
+        # would get squeezed off the bottom when the window is shorter
+        # than the natural content height.
+        self.status = tk.StringVar(value="Open a .srm file to begin.")
+        t = self.THEMES[self.current_theme]
+        self.status_lbl = tk.Label(self, textvariable=self.status, anchor="w",
+                                   relief="sunken", padx=4, pady=4,
+                                   bg=t["field"], fg=t["fg"], font=self.EB_FONT)
+        self.status_lbl.pack(fill="x", side="bottom")
+
+        # Notebook with tabs: General, Ness, Paula, Jeff, Poo, Escargo,
+        # Story flags, Hex viewer.  Packed last so it gets whatever
+        # vertical space remains after the toolbar and status bar.
         nb = ttk.Notebook(self)
         nb.pack(fill="both", expand=True, padx=8, pady=8)
         self.notebook = nb
@@ -2816,15 +2832,6 @@ class EditorApp(tk.Tk):
         self._build_escargo_tab(nb)
         self._build_flags_tab(nb)
         self._build_hex_tab(nb)
-
-        # Status bar — kept as a tk.Label so we can flash the background
-        # green on save.
-        self.status = tk.StringVar(value="Open a .srm file to begin.")
-        t = self.THEMES[self.current_theme]
-        self.status_lbl = tk.Label(self, textvariable=self.status, anchor="w",
-                                   relief="sunken", padx=4, pady=4,
-                                   bg=t["field"], fg=t["fg"], font=self.EB_FONT)
-        self.status_lbl.pack(fill="x", side="bottom")
 
     def _build_general_tab(self, nb):
         # Wrap in scoped scroll canvas — the General tab's content
@@ -3138,16 +3145,26 @@ class EditorApp(tk.Tk):
         # left of row 0, slot 1 on the right of row 0, slot 2 on left of
         # row 1, and so on. This mirrors what you see when you press Check
         # on a character's items in EB.
-        invg = ttk.LabelFrame(frm,
-            text="Inventory (14 slots)  —  layout matches in-game display.  "
-                 "Owner: [N]=Ness  [P]=Paula  [J]=Jeff  [Po]=Poo  [*]=anyone  [-]=plot.  "
-                 "Cat: BAT/FRY/GUN/YOY/SWD/WPN, BOD/ARM/OTH armor, FOD food, HEAL, BTL, PLT plot",
-            padding=8)
+        # The legend (Owner / Category codes) used to be inlined into
+        # the LabelFrame's title, but that's a single line that ttk
+        # won't wrap, so on narrower windows the right-hand "[*]=any"
+        # got chopped off.  Title is now just the section name; legend
+        # lives in a wrapped Label below so it reflows naturally.
+        invg = ttk.LabelFrame(frm, text="Inventory (14 slots)", padding=8)
         invg.pack(fill="x", pady=4)
+        legend = ttk.Label(invg,
+            text="Layout matches in-game display.  "
+                 "Owner: [N]=Ness  [P]=Paula  [J]=Jeff  [Po]=Poo  [*]=anyone  [-]=plot.  "
+                 "Cat: BAT/FRY/GUN/YOY/SWD/WPN, BOD/ARM/OTH armor, "
+                 "FOD food, HEAL, BTL, PLT plot.",
+            foreground=self.THEMES[self.current_theme]["dim"],
+            wraplength=900, justify="left")
+        # 8 slot-label-cols total (2 sides × 4 cols/side)
+        legend.grid(row=0, column=0, columnspan=8, sticky="w", pady=(0, 4))
         widgets["inv"] = []
         for r in range(14):
-            row = r // 2      # 0..6 — paired rows
-            col = r % 2       # 0=left, 1=right
+            row = (r // 2) + 1   # +1 so we leave row 0 for the legend
+            col = r % 2          # 0=left, 1=right
             base_col = col * 3
             ttk.Label(invg, text=f"Slot {r:2d}:").grid(
                 row=row, column=base_col, sticky="e", pady=1,
@@ -3418,32 +3435,69 @@ class EditorApp(tk.Tk):
             wraplength=1000, justify="left")
         warn.pack(anchor="w", pady=(0, 8))
 
+        # Two control rows so things don't get clipped on narrower
+        # windows.  Row 1: Filter entry + Clear filter.  Row 2: visibility
+        # toggles + count.
         ctrl = ttk.Frame(frm)
         ctrl.pack(fill="x", pady=4)
         ttk.Label(ctrl, text="Filter:").pack(side="left")
         self.var_flag_filter = tk.StringVar()
-        flt = ttk.Entry(ctrl, width=40, textvariable=self.var_flag_filter)
-        flt.pack(side="left", padx=4)
+        flt = ttk.Entry(ctrl, textvariable=self.var_flag_filter)
+        flt.pack(side="left", padx=4, fill="x", expand=True)
         flt.bind("<KeyRelease>", lambda _e: self._flags_refresh_listbox())
         ttk.Button(ctrl, text="Clear filter",
                    command=lambda: (self.var_flag_filter.set(""),
                                     self._flags_refresh_listbox())
                   ).pack(side="left", padx=4)
+
+        ctrl2 = ttk.Frame(frm)
+        ctrl2.pack(fill="x", pady=(0, 4))
         # Filter mode toggles
         self.var_flag_show_set = tk.BooleanVar(value=True)
         self.var_flag_show_unset = tk.BooleanVar(value=True)
         self.var_flag_show_unnamed = tk.BooleanVar(value=False)
-        ttk.Checkbutton(ctrl, text="Show set", variable=self.var_flag_show_set,
-                        command=self._flags_refresh_listbox).pack(side="left", padx=8)
-        ttk.Checkbutton(ctrl, text="Show clear", variable=self.var_flag_show_unset,
+        ttk.Checkbutton(ctrl2, text="Show set", variable=self.var_flag_show_set,
                         command=self._flags_refresh_listbox).pack(side="left")
-        ttk.Checkbutton(ctrl, text="Show unnamed flags",
-                        variable=self.var_flag_show_unnamed,
+        ttk.Checkbutton(ctrl2, text="Show clear", variable=self.var_flag_show_unset,
                         command=self._flags_refresh_listbox).pack(side="left", padx=8)
-        self.lbl_flag_count = ttk.Label(ctrl, text="")
+        ttk.Checkbutton(ctrl2, text="Show unnamed flags",
+                        variable=self.var_flag_show_unnamed,
+                        command=self._flags_refresh_listbox).pack(side="left")
+        self.lbl_flag_count = ttk.Label(ctrl2, text="")
         self.lbl_flag_count.pack(side="right")
 
-        # Listbox + scrollbar
+        # PACK ORDER MATTERS: the listbox is the only expanding widget
+        # in this tab.  If we packed it before the details panel and
+        # action buttons, then on a short window the listbox would
+        # claim everything and the bottom controls would be clipped.
+        # We pack the bottom widgets first (with side="bottom" so they
+        # stack upwards from the bottom edge), then pack the listbox
+        # last so it fills whatever space remains.
+
+        # ---- Bottom: bulk actions, split across two rows so the
+        # preset buttons (which have long labels) don't get clipped
+        # off the right edge on narrower windows.  Pack order with
+        # side="bottom": the FIRST one packed sits at the very bottom,
+        # the second sits just above it.  So btns_preset packs first.
+        btns_preset = ttk.Frame(frm)
+        btns_preset.pack(side="bottom", fill="x", pady=(0, 4))
+        btns_sel = ttk.Frame(frm)
+        btns_sel.pack(side="bottom", fill="x", pady=(4, 0))
+
+        # ---- Above buttons: selected-flag details panel
+        details = ttk.LabelFrame(frm, text="Selected flag details", padding=8)
+        details.pack(side="bottom", fill="x", pady=(4, 0))
+        self.var_flag_detail = tk.StringVar(
+            value="(select a flag in the list above)")
+        ttk.Label(details, textvariable=self.var_flag_detail,
+                  wraplength=1000, justify="left").pack(anchor="w")
+        det_btns = ttk.Frame(details)
+        det_btns.pack(fill="x", pady=(4, 0))
+        ttk.Button(det_btns, text="Add/edit my note for this flag…",
+                   command=self._flags_edit_user_note).pack(side="left")
+
+        # ---- Middle: the listbox itself (packed LAST so it fills
+        # the remaining vertical space between header and buttons).
         listfrm = ttk.Frame(frm)
         listfrm.pack(fill="both", expand=True, pady=4)
         sb = ttk.Scrollbar(listfrm, orient="vertical")
@@ -3462,36 +3516,20 @@ class EditorApp(tk.Tk):
                                lambda _e: self._flags_toggle_selected())
         self.flag_listbox.bind("<<ListboxSelect>>",
                                lambda _e: self._flags_update_details())
-
-        # Details panel below the listbox — shows the technical name,
-        # auto-translated description, curated note, and user note (with edit)
-        details = ttk.LabelFrame(frm, text="Selected flag details", padding=8)
-        details.pack(fill="x", pady=(4, 0))
-        self.var_flag_detail = tk.StringVar(
-            value="(select a flag in the list above)")
-        ttk.Label(details, textvariable=self.var_flag_detail,
-                  wraplength=1000, justify="left").pack(anchor="w")
-        det_btns = ttk.Frame(details)
-        det_btns.pack(fill="x", pady=(4, 0))
-        ttk.Button(det_btns, text="Add/edit my note for this flag…",
-                   command=self._flags_edit_user_note).pack(side="left")
-
-        # Bottom: bulk actions
-        btns = ttk.Frame(frm)
-        btns.pack(fill="x", pady=4)
-        ttk.Button(btns, text="Toggle selected",
+        # Row 1: act on the current listbox selection
+        ttk.Button(btns_sel, text="Toggle selected",
                    command=self._flags_toggle_selected).pack(side="left", padx=2)
-        ttk.Button(btns, text="Set selected",
+        ttk.Button(btns_sel, text="Set selected",
                    command=lambda: self._flags_set_selected(True)).pack(side="left", padx=2)
-        ttk.Button(btns, text="Clear selected",
+        ttk.Button(btns_sel, text="Clear selected",
                    command=lambda: self._flags_set_selected(False)).pack(side="left", padx=2)
-        ttk.Separator(btns, orient="vertical").pack(side="left", fill="y", padx=10)
-        ttk.Button(btns, text="Mark all 8 sanctuaries cleared",
+        # Row 2: one-click presets (longer labels — own row)
+        ttk.Button(btns_preset, text="Mark all 8 sanctuaries cleared",
                    command=lambda: self._flags_apply_preset(
                        self.SANCTUARY_FLAGS, True,
                        "Marked all 8 sanctuary boss flags as defeated.")
                   ).pack(side="left", padx=2)
-        ttk.Button(btns, text="Clear all sanctuary flags",
+        ttk.Button(btns_preset, text="Clear all sanctuary flags",
                    command=lambda: self._flags_apply_preset(
                        self.SANCTUARY_FLAGS, False,
                        "Cleared all 8 sanctuary boss flags.")

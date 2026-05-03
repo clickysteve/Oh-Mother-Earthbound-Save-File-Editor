@@ -216,7 +216,7 @@ the app reports:
 
 ```bash
 brew install create-dmg          # one-time
-./build_mac_app.sh               # produces dist/Oh-Mother-v0.4.0.dmg
+./build_mac_app.sh               # produces dist/Oh-Mother-v1.0.0.dmg
 ```
 
 That's the file to upload to a GitHub Release. Users download, mount,

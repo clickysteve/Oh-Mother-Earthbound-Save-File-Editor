@@ -160,6 +160,25 @@ APP_PATH="dist/${APP_NAME}.app"
 echo "    built ${APP_PATH}"
 
 # ---------------------------------------------------------------------
+# PyInstaller writes an Info.plist with CFBundleShortVersionString and
+# CFBundleVersion both set to "0.0.0" (its default). That's what shows
+# up in Finder Get Info / the About dialog.  Overwrite both with the
+# version pulled from the source so the bundle, the DMG filename, and
+# the in-app title bar are all in sync.
+PLIST="${APP_PATH}/Contents/Info.plist"
+if [[ -f "${PLIST}" ]]; then
+    VERSION=$(awk -F'"' '/^__version__/ {print $2; exit}' eb_save_gui.py)
+    if [[ -z "${VERSION}" ]]; then
+        VERSION="dev"
+    fi
+    echo "==> Stamping Info.plist version: ${VERSION}"
+    /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString ${VERSION}" "${PLIST}"
+    /usr/libexec/PlistBuddy -c "Set :CFBundleVersion ${VERSION}"            "${PLIST}"
+else
+    echo "WARN: ${PLIST} not found — skipping version stamp"
+fi
+
+# ---------------------------------------------------------------------
 echo "==> Code-signing every binary in the bundle"
 codesign --force --deep --options runtime \
     --sign "${IDENTITY}" \

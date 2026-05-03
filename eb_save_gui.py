@@ -30,7 +30,7 @@ References used to build the format-handling logic:
 # `str | None` work on Python 3.9 (Apple's macOS bundled python3 is 3.9).
 from __future__ import annotations
 
-__version__ = "0.4.0"
+__version__ = "1.0.0"
 
 import json
 import re

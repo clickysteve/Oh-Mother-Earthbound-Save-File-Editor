@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# User config (per-launch settings — not project-wide)
+.eb_save_editor.json
+
+# Local sandbox / scratch / research output that we don't want in the repo
+_local/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# Save backups (don't accidentally commit user save data)
+*.srm
+*.sav
+*.bak
+*.bak.srm
+
+# Build artifacts (not used today, just in case)
+build/
+dist/
+*.egg-info/
